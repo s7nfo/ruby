@@ -10426,7 +10426,11 @@ rstrip_offset(VALUE str, const char *s, const char *e, rb_encoding *enc)
     t = e;
 
     /* remove trailing spaces or '\0's */
-    if (single_byte_optimizable(str)) {
+    if (single_byte_optimizable(str) ||
+        rb_enc_to_index(enc) == rb_utf8_encindex()) {
+        /* For UTF-8, a backward byte scan can't split a character: the
+         * strip set is ASCII (<0x80) while continuation bytes are >=0x80.
+         * coderange is already known not to be BROKEN here. */
         unsigned char c;
         while (s < t && ((c = *(t-1)) == '\0' || ascii_isspace(c))) t--;
     }
