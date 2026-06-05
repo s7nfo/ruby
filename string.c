@@ -3997,7 +3997,7 @@ rb_str_append_as_bytes(int argc, VALUE *argv, VALUE str)
                 rb_bug("append_as_bytes arguments should have been validated");
             }
         }
-        break;
+        goto keep_cr;
       }
       case ENC_CODERANGE_VALID:
         if (ENCODING_GET_INLINED(str) == ENCINDEX_ASCII_8BIT) {
