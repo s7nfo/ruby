@@ -6938,6 +6938,18 @@ rb_str_reverse(VALUE str)
 
     if (RSTRING_LEN(str) > 1) {
         if (single_byte_optimizable(str)) {
+            /* block reverse: load 8 bytes from the front, byte-swap, store at
+             * the back; falls back to a scalar tail for the remaining <8. */
+            if (e - s >= 16) {
+                while (e - s >= 8) {
+                    uint64_t v;
+                    memcpy(&v, s, 8);
+                    v = __builtin_bswap64(v);
+                    p -= 8;
+                    memcpy(p, &v, 8);
+                    s += 8;
+                }
+            }
             while (s < e) {
                 *--p = *s++;
             }
