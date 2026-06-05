@@ -8157,6 +8157,33 @@ rb_str_downcase(int argc, VALUE *argv, VALUE str)
 }
 
 
+static bool
+capitalize_single(VALUE str)
+{
+    char *s = RSTRING_PTR(str), *send = RSTRING_END(str);
+    bool modified = false;
+
+    if (s < send) {
+        unsigned int c = *(unsigned char*)s;
+
+        if ('a' <= c && c <= 'z') {
+            *s = 'A' + (c - 'a');
+            modified = true;
+        }
+        s++;
+    }
+    while (s < send) {
+        unsigned int c = *(unsigned char*)s;
+
+        if ('A' <= c && c <= 'Z') {
+            *s = 'a' + (c - 'A');
+            modified = true;
+        }
+        s++;
+    }
+    return modified;
+}
+
 /*
  *  call-seq:
  *    capitalize!(mapping = :ascii) -> self or nil
@@ -8179,7 +8206,11 @@ rb_str_capitalize_bang(int argc, VALUE *argv, VALUE str)
     str_modify_keep_cr(str);
     enc = str_true_enc(str);
     if (RSTRING_LEN(str) == 0 || !RSTRING_PTR(str)) return Qnil;
-    if (flags&ONIGENC_CASE_ASCII_ONLY)
+    if (case_option_single_p(flags, enc, str)) {
+        if (capitalize_single(str))
+            flags |= ONIGENC_CASE_MODIFIED;
+    }
+    else if (flags&ONIGENC_CASE_ASCII_ONLY)
         rb_str_ascii_casemap(str, str, &flags, enc);
     else
         str_shared_replace(str, rb_str_casemap(str, &flags, enc));
@@ -8207,7 +8238,12 @@ rb_str_capitalize(int argc, VALUE *argv, VALUE str)
     flags = check_case_options(argc, argv, flags);
     enc = str_true_enc(str);
     if (RSTRING_LEN(str) == 0 || !RSTRING_PTR(str)) return str;
-    if (flags&ONIGENC_CASE_ASCII_ONLY) {
+    if (case_option_single_p(flags, enc, str)) {
+        ret = rb_str_new(RSTRING_PTR(str), RSTRING_LEN(str));
+        str_enc_copy_direct(ret, str);
+        capitalize_single(ret);
+    }
+    else if (flags&ONIGENC_CASE_ASCII_ONLY) {
         ret = rb_str_new(0, RSTRING_LEN(str));
         rb_str_ascii_casemap(str, ret, &flags, enc);
     }
@@ -8217,6 +8253,28 @@ rb_str_capitalize(int argc, VALUE *argv, VALUE str)
     return ret;
 }
 
+
+static bool
+swapcase_single(VALUE str)
+{
+    char *s = RSTRING_PTR(str), *send = RSTRING_END(str);
+    bool modified = false;
+
+    while (s < send) {
+        unsigned int c = *(unsigned char*)s;
+
+        if ('a' <= c && c <= 'z') {
+            *s = 'A' + (c - 'a');
+            modified = true;
+        }
+        else if ('A' <= c && c <= 'Z') {
+            *s = 'a' + (c - 'A');
+            modified = true;
+        }
+        s++;
+    }
+    return modified;
+}
 
 /*
  *  call-seq:
@@ -8239,7 +8297,11 @@ rb_str_swapcase_bang(int argc, VALUE *argv, VALUE str)
     flags = check_case_options(argc, argv, flags);
     str_modify_keep_cr(str);
     enc = str_true_enc(str);
-    if (flags&ONIGENC_CASE_ASCII_ONLY)
+    if (case_option_single_p(flags, enc, str)) {
+        if (swapcase_single(str))
+            flags |= ONIGENC_CASE_MODIFIED;
+    }
+    else if (flags&ONIGENC_CASE_ASCII_ONLY)
         rb_str_ascii_casemap(str, str, &flags, enc);
     else
         str_shared_replace(str, rb_str_casemap(str, &flags, enc));
@@ -8267,7 +8329,12 @@ rb_str_swapcase(int argc, VALUE *argv, VALUE str)
     flags = check_case_options(argc, argv, flags);
     enc = str_true_enc(str);
     if (RSTRING_LEN(str) == 0 || !RSTRING_PTR(str)) return str_duplicate(rb_cString, str);
-    if (flags&ONIGENC_CASE_ASCII_ONLY) {
+    if (case_option_single_p(flags, enc, str)) {
+        ret = rb_str_new(RSTRING_PTR(str), RSTRING_LEN(str));
+        str_enc_copy_direct(ret, str);
+        swapcase_single(ret);
+    }
+    else if (flags&ONIGENC_CASE_ASCII_ONLY) {
         ret = rb_str_new(0, RSTRING_LEN(str));
         rb_str_ascii_casemap(str, ret, &flags, enc);
     }
