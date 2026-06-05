@@ -11077,14 +11077,35 @@ rb_str_sum(int argc, VALUE *argv, VALUE str)
     len = RSTRING_LEN(str);
     pend = p + len;
 
-    while (p < pend) {
-        if (FIXNUM_MAX - UCHAR_MAX < sum0) {
-            sum = rb_funcall(sum, '+', 1, LONG2FIX(sum0));
-            str_mod_check(str, ptr, len);
-            sum0 = 0;
+    {
+        /* Process in blocks small enough that overflow cannot occur within a
+         * block, so the inner accumulation loop is branch-free and the compiler
+         * can vectorize it. The overflow-to-bignum check is performed once per
+         * block. block_len is bounded so that block_len*UCHAR_MAX <= FIXNUM_MAX,
+         * hence a freshly-flushed sum0 (== block_sum) always fits a FIXNUM for
+         * LONG2FIX, matching the original per-byte semantics bit-for-bit. */
+        const unsigned long block_len_cap = 1UL << 24;
+        const unsigned long block_len =
+            (FIXNUM_MAX / UCHAR_MAX) < block_len_cap ?
+            (FIXNUM_MAX / UCHAR_MAX) : block_len_cap;
+        const unsigned long block_max = block_len * UCHAR_MAX;
+        while (p < pend) {
+            char *bend = p + block_len;
+            unsigned long block_sum = 0;
+            if (bend > pend) bend = pend;
+            /* Flush before accumulating so sum0 + block_sum cannot exceed
+             * FIXNUM_MAX (sum0 <= FIXNUM_MAX - block_max here). */
+            if (FIXNUM_MAX - block_max < sum0) {
+                sum = rb_funcall(sum, '+', 1, LONG2FIX(sum0));
+                str_mod_check(str, ptr, len);
+                sum0 = 0;
+            }
+            while (p < bend) {
+                block_sum += (unsigned char)*p;
+                p++;
+            }
+            sum0 += block_sum;
         }
-        sum0 += (unsigned char)*p;
-        p++;
     }
 
     if (bits == 0) {
